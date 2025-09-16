@@ -481,7 +481,7 @@ body {
 }
 
 .hh-area-form textarea {
-    min-height: 50px;
+    min-height: 130px;
     resize: vertical;
 }
 
@@ -990,6 +990,7 @@ body {
     cursor: pointer;
     transition: transform .12s ease, border-color .18s ease, background .18s ease;
     margin-left: 6px;
+    text-decoration: none;
 }
 
 .hh-docs .act-btn:first-child {
