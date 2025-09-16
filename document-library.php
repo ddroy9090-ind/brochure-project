@@ -184,9 +184,9 @@ require_once __DIR__ . '/includes/common-header.php';
                                                                 <a class="act-btn" aria-label="Edit" href="area-details.php?id=<?php echo htmlspecialchars((string) $areaDetailId, ENT_QUOTES, 'UTF-8'); ?>">
                                                                     <img src="assets/icons/edit.png" alt="">
                                                                 </a>
-                                                                <button class="act-btn" aria-label="View">
+                                                                <a class="act-btn" aria-label="View" href="view-area-details.php?id=<?php echo htmlspecialchars((string) $areaDetailId, ENT_QUOTES, 'UTF-8'); ?>">
                                                                     <img src="assets/icons/eye.png" alt="">
-                                                                </button>
+                                                                </a>
                                                                 <button class="act-btn" aria-label="Download">
                                                                     <img src="assets/icons/download.png" alt="">
                                                                 </button>
