@@ -155,6 +155,35 @@
   });
 </script>
 
+<script>
+    // Auto-dismiss alerts that opt-in via data-auto-dismiss attribute
+    (function () {
+        const alerts = document.querySelectorAll('.alert[data-auto-dismiss]');
+        if (!alerts.length) {
+            return;
+        }
+
+        alerts.forEach((alertEl) => {
+            const attributeValue = alertEl.getAttribute('data-auto-dismiss');
+            let delay = parseInt(attributeValue, 10);
+            if (Number.isNaN(delay) || delay < 0) {
+                delay = 5000;
+            }
+
+            window.setTimeout(() => {
+                if (window.bootstrap && typeof window.bootstrap.Alert === 'function') {
+                    const instance = window.bootstrap.Alert.getOrCreateInstance(alertEl);
+                    instance.close();
+                    return;
+                }
+
+                alertEl.classList.remove('show');
+                alertEl.style.display = 'none';
+            }, delay);
+        });
+    })();
+</script>
+
 
 
 </body>
