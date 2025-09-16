@@ -1,0 +1,14 @@
+{
+    "name": "hh/brochure-project",
+    "description": "Brochure project CMS",
+    "type": "project",
+    "license": "proprietary",
+    "require": {
+        "dompdf/dompdf": "^2.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "": ""
+        }
+    }
+}
