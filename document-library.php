@@ -133,6 +133,7 @@ require_once __DIR__ . '/includes/common-header.php';
                                                 <?php else: ?>
                                                     <?php foreach ($areaDetails as $detail): ?>
                                                         <?php
+                                                        $areaDetailId = (int) ($detail['id'] ?? 0);
                                                         $propertyName = trim((string) ($detail['property_name'] ?? ''));
                                                         if ($propertyName === '') {
                                                             $propertyName = 'Untitled Property';
@@ -180,9 +181,9 @@ require_once __DIR__ . '/includes/common-header.php';
                                                             </td>
 
                                                             <td class="td-actions">
-                                                                <button class="act-btn" aria-label="Edit">
+                                                                <a class="act-btn" aria-label="Edit" href="area-details.php?id=<?php echo htmlspecialchars((string) $areaDetailId, ENT_QUOTES, 'UTF-8'); ?>">
                                                                     <img src="assets/icons/edit.png" alt="">
-                                                                </button>
+                                                                </a>
                                                                 <button class="act-btn" aria-label="View">
                                                                     <img src="assets/icons/eye.png" alt="">
                                                                 </button>
