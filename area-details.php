@@ -3,9 +3,300 @@
 
 // 1) Auth guard MUST be first (no output before this)
 require_once __DIR__ . '/includes/auth_check.php';
+require_once __DIR__ . '/includes/db.php';
 
 // 2) Optional: page title for your header include
 $pageTitle = 'Dashboard';
+
+$successMessage = null;
+$errorMessage = null;
+
+$normalizeDate = static function (?string $value): string {
+    $value = trim((string) ($value ?? ''));
+    if ($value === '') {
+        return '';
+    }
+
+    $date = date_create($value);
+    return $date ? $date->format('Y-m-d') : '';
+};
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $transactionStarted = false;
+    $fileStmt = null;
+
+    try {
+        if (!$conn->query('CREATE TABLE IF NOT EXISTS `area_details` (
+                `id` INT(11) NOT NULL AUTO_INCREMENT,
+                `property_id` VARCHAR(255) NOT NULL,
+                `registration_no` VARCHAR(255) DEFAULT NULL,
+                `property_name` VARCHAR(255) NOT NULL,
+                `address` TEXT NOT NULL,
+                `project_name` VARCHAR(255) DEFAULT NULL,
+                `developer_name` VARCHAR(255) DEFAULT NULL,
+                `title` VARCHAR(255) DEFAULT NULL,
+                `about_details` LONGTEXT DEFAULT NULL,
+                `about_developer` LONGTEXT DEFAULT NULL,
+                `starting_price` VARCHAR(255) DEFAULT NULL,
+                `payment_plan` VARCHAR(255) DEFAULT NULL,
+                `handover_date` DATE DEFAULT NULL,
+                `area_title` VARCHAR(255) DEFAULT NULL,
+                `area_heading` VARCHAR(255) DEFAULT NULL,
+                `area_description` LONGTEXT DEFAULT NULL,
+                `amenities` LONGTEXT DEFAULT NULL,
+                `project_title_2` VARCHAR(255) DEFAULT NULL,
+                `project_title_3` VARCHAR(255) DEFAULT NULL,
+                `price_from` VARCHAR(255) DEFAULT NULL,
+                `handover_date_3` DATE DEFAULT NULL,
+                `location_3` VARCHAR(255) DEFAULT NULL,
+                `development_time` VARCHAR(255) DEFAULT NULL,
+                `project_description_2` LONGTEXT DEFAULT NULL,
+                `down_payment` VARCHAR(255) DEFAULT NULL,
+                `pre_handover` VARCHAR(255) DEFAULT NULL,
+                `handover` VARCHAR(255) DEFAULT NULL,
+                `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (`id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;')) {
+            throw new RuntimeException('Unable to ensure area_details table exists: ' . $conn->error);
+        }
+
+        if (!$conn->query('CREATE TABLE IF NOT EXISTS `area_detail_files` (
+                `id` INT(11) NOT NULL AUTO_INCREMENT,
+                `area_detail_id` INT(11) NOT NULL,
+                `file_key` VARCHAR(100) NOT NULL,
+                `file_name` VARCHAR(255) DEFAULT NULL,
+                `mime_type` VARCHAR(150) DEFAULT NULL,
+                `file_size` INT(11) DEFAULT NULL,
+                `file_data` LONGBLOB NOT NULL,
+                `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (`id`),
+                KEY `fk_area_detail` (`area_detail_id`),
+                CONSTRAINT `fk_area_detail` FOREIGN KEY (`area_detail_id`) REFERENCES `area_details` (`id`) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;')) {
+            throw new RuntimeException('Unable to ensure area_detail_files table exists: ' . $conn->error);
+        }
+
+        if (!$conn->begin_transaction()) {
+            throw new RuntimeException('Unable to start database transaction: ' . $conn->error);
+        }
+        $transactionStarted = true;
+
+        $propertyId = trim((string) ($_POST['property_id'] ?? ''));
+        $propertyName = trim((string) ($_POST['property_name'] ?? ''));
+        $address = trim((string) ($_POST['address'] ?? ''));
+
+        if ($propertyId === '' || $propertyName === '' || $address === '') {
+            throw new RuntimeException('Property ID, Property Name and Address are required.');
+        }
+
+        $registrationNo = trim((string) ($_POST['registration_no'] ?? ''));
+        $projectName = trim((string) ($_POST['project_name'] ?? ''));
+        $developerName = trim((string) ($_POST['developer_name'] ?? ''));
+        $title = trim((string) ($_POST['title'] ?? ''));
+        $aboutDetails = trim((string) ($_POST['about_details'] ?? ''));
+        $aboutDeveloper = trim((string) ($_POST['about_developer'] ?? ''));
+        $startingPrice = trim((string) ($_POST['starting_price'] ?? ''));
+        $paymentPlan = trim((string) ($_POST['payment_plan'] ?? ''));
+        $handoverDate = $normalizeDate($_POST['handover_date'] ?? null);
+        $areaTitle = trim((string) ($_POST['area_title'] ?? ''));
+        $areaHeading = trim((string) ($_POST['area_heading'] ?? ''));
+        $areaDescription = trim((string) ($_POST['area_description'] ?? ''));
+
+        $amenitiesRaw = $_POST['amenities'] ?? [];
+        if (!is_array($amenitiesRaw)) {
+            $amenitiesRaw = [];
+        }
+        $amenities = array_values(array_filter(array_map(static function ($item) {
+            return trim((string) $item);
+        }, $amenitiesRaw), static function ($value) {
+            return $value !== '';
+        }));
+        $amenitiesJson = $amenities ? json_encode($amenities, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) : '';
+
+        $projectTitle2 = trim((string) ($_POST['project_title_2'] ?? ''));
+        $projectTitle3 = trim((string) ($_POST['project_title_3'] ?? ''));
+        $priceFrom = trim((string) ($_POST['price_from'] ?? ''));
+        $handoverDate3 = $normalizeDate($_POST['handover_date_3'] ?? null);
+        $location3 = trim((string) ($_POST['location_3'] ?? ''));
+        $developmentTime = trim((string) ($_POST['development_time'] ?? ''));
+        $projectDescription2 = trim((string) ($_POST['project_description_2'] ?? ''));
+        $downPayment = trim((string) ($_POST['down_payment'] ?? ''));
+        $preHandover = trim((string) ($_POST['pre_handover'] ?? ''));
+        $handover = trim((string) ($_POST['handover'] ?? ''));
+
+        $insertSql = <<<'SQL'
+            INSERT INTO area_details (
+                property_id, registration_no, property_name, address,
+                project_name, developer_name, title, about_details,
+                about_developer, starting_price, payment_plan, handover_date,
+                area_title, area_heading, area_description, amenities,
+                project_title_2, project_title_3, price_from, handover_date_3,
+                location_3, development_time, project_description_2, down_payment,
+                pre_handover, handover
+            ) VALUES (
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULLIF(?, ''),
+                ?, ?, ?, NULLIF(?, ''), ?, ?, ?, NULLIF(?, ''),
+                ?, ?, ?, ?, ?, ?
+            )
+            SQL;
+
+        $stmt = $conn->prepare($insertSql);
+        if (!$stmt) {
+            throw new RuntimeException('Unable to prepare area details insert: ' . $conn->error);
+        }
+
+        $stmt->bind_param(
+            str_repeat('s', 26),
+            $propertyId,
+            $registrationNo,
+            $propertyName,
+            $address,
+            $projectName,
+            $developerName,
+            $title,
+            $aboutDetails,
+            $aboutDeveloper,
+            $startingPrice,
+            $paymentPlan,
+            $handoverDate,
+            $areaTitle,
+            $areaHeading,
+            $areaDescription,
+            $amenitiesJson,
+            $projectTitle2,
+            $projectTitle3,
+            $priceFrom,
+            $handoverDate3,
+            $location3,
+            $developmentTime,
+            $projectDescription2,
+            $downPayment,
+            $preHandover,
+            $handover
+        );
+
+        if (!$stmt->execute()) {
+            throw new RuntimeException('Unable to save area details: ' . $stmt->error);
+        }
+
+        $areaDetailId = (int) $stmt->insert_id;
+        $stmt->close();
+
+        $fileStmt = $conn->prepare('INSERT INTO area_detail_files (
+                area_detail_id, file_key, file_name, mime_type, file_size, file_data
+            ) VALUES (
+                ?, ?, ?, ?, ?, ?
+            )');
+
+        if (!$fileStmt) {
+            throw new RuntimeException('Unable to prepare file insert: ' . $conn->error);
+        }
+
+        $fileAreaId = $areaDetailId;
+        $fileKeyParam = '';
+        $fileNameParam = '';
+        $fileMimeParam = '';
+        $fileSizeParam = 0;
+        $fileDataParam = '';
+
+        if (!$fileStmt->bind_param('isssis', $fileAreaId, $fileKeyParam, $fileNameParam, $fileMimeParam, $fileSizeParam, $fileDataParam)) {
+            throw new RuntimeException('Unable to bind file parameters: ' . $fileStmt->error);
+        }
+
+        $storeFile = static function (string $fieldKey, array $fileInfo) use ($fileStmt, &$fileKeyParam, &$fileNameParam, &$fileMimeParam, &$fileSizeParam, &$fileDataParam): void {
+            if (!isset($fileInfo['error'])) {
+                return;
+            }
+
+            if (is_array($fileInfo['error'])) {
+                throw new RuntimeException('Invalid upload data for ' . $fieldKey . '.');
+            }
+
+            if ($fileInfo['error'] === UPLOAD_ERR_NO_FILE) {
+                return;
+            }
+
+            if ($fileInfo['error'] !== UPLOAD_ERR_OK) {
+                throw new RuntimeException('Error while uploading ' . $fieldKey . ' (code ' . $fileInfo['error'] . ').');
+            }
+
+            $tmpPath = (string) ($fileInfo['tmp_name'] ?? '');
+            if ($tmpPath === '' || !is_uploaded_file($tmpPath)) {
+                throw new RuntimeException('Uploaded file for ' . $fieldKey . ' is not valid.');
+            }
+
+            $fileContents = file_get_contents($tmpPath);
+            if ($fileContents === false) {
+                throw new RuntimeException('Unable to read uploaded file for ' . $fieldKey . '.');
+            }
+
+            $fileKeyParam = $fieldKey;
+            $fileNameParam = (string) ($fileInfo['name'] ?? '');
+            $fileMimeParam = (string) ($fileInfo['type'] ?? '');
+            $fileSizeParam = (int) ($fileInfo['size'] ?? 0);
+            $fileDataParam = $fileContents;
+
+            if (!$fileStmt->execute()) {
+                throw new RuntimeException('Unable to save uploaded file for ' . $fieldKey . ': ' . $fileStmt->error);
+            }
+        };
+
+        $processMultipleFiles = static function (string $fieldKey, array $files) use ($storeFile): void {
+            if (!isset($files['name'])) {
+                return;
+            }
+
+            if (is_array($files['name'])) {
+                $count = count($files['name']);
+                for ($i = 0; $i < $count; $i++) {
+                    $storeFile($fieldKey, [
+                        'name' => $files['name'][$i] ?? null,
+                        'type' => $files['type'][$i] ?? null,
+                        'tmp_name' => $files['tmp_name'][$i] ?? null,
+                        'error' => $files['error'][$i] ?? UPLOAD_ERR_NO_FILE,
+                        'size' => $files['size'][$i] ?? 0,
+                    ]);
+                }
+                return;
+            }
+
+            $storeFile($fieldKey, $files);
+        };
+
+        if (isset($_FILES['banner_image'])) {
+            $processMultipleFiles('banner_image', $_FILES['banner_image']);
+        }
+        if (isset($_FILES['area_image'])) {
+            $processMultipleFiles('area_image', $_FILES['area_image']);
+        }
+        if (isset($_FILES['project_image_2'])) {
+            $processMultipleFiles('project_image_2', $_FILES['project_image_2']);
+        }
+        if (isset($_FILES['transactions_image'])) {
+            $processMultipleFiles('transactions_image', $_FILES['transactions_image']);
+        }
+        if (isset($_FILES['property_images'])) {
+            $processMultipleFiles('property_images', $_FILES['property_images']);
+        }
+        if (isset($_FILES['floor_plan_file'])) {
+            $processMultipleFiles('floor_plan_file', $_FILES['floor_plan_file']);
+        }
+
+        $conn->commit();
+        $successMessage = 'Area details saved successfully.';
+        $_POST = [];
+        $_FILES = [];
+    } catch (Throwable $exception) {
+        if ($transactionStarted) {
+            $conn->rollback();
+        }
+        $errorMessage = $exception->getMessage();
+    } finally {
+        if ($fileStmt instanceof mysqli_stmt) {
+            $fileStmt->close();
+        }
+    }
+}
 
 // 3) Common header (HTML <head>, opening <body>, etc.)
 require_once __DIR__ . '/includes/common-header.php';
@@ -24,7 +315,19 @@ require_once __DIR__ . '/includes/common-header.php';
 
             <!-- Dashboard Content -->
             <div class="p-2">
-                <form class="hh-area-form" action="#" method="post" novalidate>
+                <?php if ($successMessage): ?>
+                    <div class="alert alert-success alert-dismissible fade show" role="alert">
+                        <?php echo htmlspecialchars($successMessage, ENT_QUOTES, 'UTF-8'); ?>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                <?php elseif ($errorMessage): ?>
+                    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                        <?php echo htmlspecialchars($errorMessage, ENT_QUOTES, 'UTF-8'); ?>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                <?php endif; ?>
+
+                <form class="hh-area-form" action="<?php echo htmlspecialchars($_SERVER['REQUEST_URI'], ENT_QUOTES, 'UTF-8'); ?>" method="post" enctype="multipart/form-data" novalidate>
                     <div class="form-section">
 
                         <div class="form-wrap">
