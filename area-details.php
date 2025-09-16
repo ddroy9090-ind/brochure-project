@@ -21,11 +21,218 @@ $normalizeDate = static function (?string $value): string {
     return $date ? $date->format('Y-m-d') : '';
 };
 
+$escapeHtml = static function (?string $value): string {
+    return htmlspecialchars((string) ($value ?? ''), ENT_QUOTES, 'UTF-8');
+};
+
+$defaultFormData = [
+    'property_id' => '',
+    'registration_no' => '',
+    'property_name' => '',
+    'address' => '',
+    'project_name' => '',
+    'developer_name' => '',
+    'title' => '',
+    'about_details' => '',
+    'about_developer' => '',
+    'starting_price' => '',
+    'payment_plan' => '',
+    'handover_date' => '',
+    'area_title' => '',
+    'area_heading' => '',
+    'area_description' => '',
+    'amenities' => [],
+    'project_title_2' => '',
+    'project_title_3' => '',
+    'price_from' => '',
+    'handover_date_3' => '',
+    'location_3' => '',
+    'development_time' => '',
+    'project_description_2' => '',
+    'down_payment' => '',
+    'pre_handover' => '',
+    'handover' => '',
+];
+
+$formData = $defaultFormData;
+$editingId = null;
+
+$amenityChecked = static function (array $selectedAmenities, string $value): string {
+    return in_array($value, $selectedAmenities, true) ? ' checked' : '';
+};
+
+$loadAreaDetail = static function (mysqli $conn, int $areaId) use ($normalizeDate, $defaultFormData): ?array {
+    if ($areaId <= 0) {
+        return null;
+    }
+
+    $sql = 'SELECT
+            property_id,
+            registration_no,
+            property_name,
+            address,
+            project_name,
+            developer_name,
+            title,
+            about_details,
+            about_developer,
+            starting_price,
+            payment_plan,
+            handover_date,
+            area_title,
+            area_heading,
+            area_description,
+            amenities,
+            project_title_2,
+            project_title_3,
+            price_from,
+            handover_date_3,
+            location_3,
+            development_time,
+            project_description_2,
+            down_payment,
+            pre_handover,
+            handover
+        FROM area_details
+        WHERE id = ' . $areaId . '
+        LIMIT 1';
+
+    $result = $conn->query($sql);
+    if ($result === false) {
+        throw new RuntimeException('Unable to load area details: ' . $conn->error);
+    }
+
+    $row = $result->fetch_assoc();
+    $result->free();
+
+    if (!$row) {
+        return null;
+    }
+
+    $data = $defaultFormData;
+
+    $data['property_id'] = trim((string) ($row['property_id'] ?? ''));
+    $data['registration_no'] = trim((string) ($row['registration_no'] ?? ''));
+    $data['property_name'] = trim((string) ($row['property_name'] ?? ''));
+    $data['address'] = trim((string) ($row['address'] ?? ''));
+    $data['project_name'] = trim((string) ($row['project_name'] ?? ''));
+    $data['developer_name'] = trim((string) ($row['developer_name'] ?? ''));
+    $data['title'] = trim((string) ($row['title'] ?? ''));
+    $data['about_details'] = trim((string) ($row['about_details'] ?? ''));
+    $data['about_developer'] = trim((string) ($row['about_developer'] ?? ''));
+    $data['starting_price'] = trim((string) ($row['starting_price'] ?? ''));
+    $data['payment_plan'] = trim((string) ($row['payment_plan'] ?? ''));
+    $data['handover_date'] = $normalizeDate($row['handover_date'] ?? null);
+    $data['area_title'] = trim((string) ($row['area_title'] ?? ''));
+    $data['area_heading'] = trim((string) ($row['area_heading'] ?? ''));
+    $data['area_description'] = trim((string) ($row['area_description'] ?? ''));
+
+    $amenities = [];
+    $amenitiesRaw = trim((string) ($row['amenities'] ?? ''));
+    if ($amenitiesRaw !== '') {
+        $decoded = json_decode($amenitiesRaw, true);
+        if (is_array($decoded)) {
+            $amenities = array_values(array_filter(array_map(static function ($item) {
+                return is_string($item) ? trim($item) : '';
+            }, $decoded), static function ($value) {
+                return $value !== '';
+            }));
+        }
+    }
+    $data['amenities'] = $amenities;
+
+    $data['project_title_2'] = trim((string) ($row['project_title_2'] ?? ''));
+    $data['project_title_3'] = trim((string) ($row['project_title_3'] ?? ''));
+    $data['price_from'] = trim((string) ($row['price_from'] ?? ''));
+    $data['handover_date_3'] = $normalizeDate($row['handover_date_3'] ?? null);
+    $data['location_3'] = trim((string) ($row['location_3'] ?? ''));
+    $data['development_time'] = trim((string) ($row['development_time'] ?? ''));
+    $data['project_description_2'] = trim((string) ($row['project_description_2'] ?? ''));
+    $data['down_payment'] = trim((string) ($row['down_payment'] ?? ''));
+    $data['pre_handover'] = trim((string) ($row['pre_handover'] ?? ''));
+    $data['handover'] = trim((string) ($row['handover'] ?? ''));
+
+    return $data;
+};
+
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    $requestedId = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+    if ($requestedId !== false && $requestedId !== null) {
+        try {
+            $loadedData = $loadAreaDetail($conn, (int) $requestedId);
+            if ($loadedData === null) {
+                $errorMessage = 'Area detail not found.';
+            } else {
+                $formData = $loadedData;
+                $editingId = (int) $requestedId;
+            }
+        } catch (Throwable $exception) {
+            $errorMessage = $exception->getMessage();
+        }
+    }
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $transactionStarted = false;
     $fileStmt = null;
 
     try {
+        $editingIdValue = trim((string) ($_POST['area_detail_id'] ?? ''));
+        if ($editingIdValue !== '') {
+            $editingIdCandidate = (int) $editingIdValue;
+            if ($editingIdCandidate <= 0) {
+                throw new RuntimeException('Invalid area detail specified.');
+            }
+            $editingId = $editingIdCandidate;
+        } else {
+            $editingId = null;
+        }
+
+        $formData = $defaultFormData;
+
+        $formData['property_id'] = trim((string) ($_POST['property_id'] ?? ''));
+        $formData['registration_no'] = trim((string) ($_POST['registration_no'] ?? ''));
+        $formData['property_name'] = trim((string) ($_POST['property_name'] ?? ''));
+        $formData['address'] = trim((string) ($_POST['address'] ?? ''));
+        $formData['project_name'] = trim((string) ($_POST['project_name'] ?? ''));
+        $formData['developer_name'] = trim((string) ($_POST['developer_name'] ?? ''));
+        $formData['title'] = trim((string) ($_POST['title'] ?? ''));
+        $formData['about_details'] = trim((string) ($_POST['about_details'] ?? ''));
+        $formData['about_developer'] = trim((string) ($_POST['about_developer'] ?? ''));
+        $formData['starting_price'] = trim((string) ($_POST['starting_price'] ?? ''));
+        $formData['payment_plan'] = trim((string) ($_POST['payment_plan'] ?? ''));
+        $formData['handover_date'] = $normalizeDate($_POST['handover_date'] ?? null);
+        $formData['area_title'] = trim((string) ($_POST['area_title'] ?? ''));
+        $formData['area_heading'] = trim((string) ($_POST['area_heading'] ?? ''));
+        $formData['area_description'] = trim((string) ($_POST['area_description'] ?? ''));
+
+        $amenitiesRaw = $_POST['amenities'] ?? [];
+        if (!is_array($amenitiesRaw)) {
+            $amenitiesRaw = [];
+        }
+        $formData['amenities'] = array_values(array_filter(array_map(static function ($item) {
+            return trim((string) $item);
+        }, $amenitiesRaw), static function ($value) {
+            return $value !== '';
+        }));
+
+        $formData['project_title_2'] = trim((string) ($_POST['project_title_2'] ?? ''));
+        $formData['project_title_3'] = trim((string) ($_POST['project_title_3'] ?? ''));
+        $formData['price_from'] = trim((string) ($_POST['price_from'] ?? ''));
+        $formData['handover_date_3'] = $normalizeDate($_POST['handover_date_3'] ?? null);
+        $formData['location_3'] = trim((string) ($_POST['location_3'] ?? ''));
+        $formData['development_time'] = trim((string) ($_POST['development_time'] ?? ''));
+        $formData['project_description_2'] = trim((string) ($_POST['project_description_2'] ?? ''));
+        $formData['down_payment'] = trim((string) ($_POST['down_payment'] ?? ''));
+        $formData['pre_handover'] = trim((string) ($_POST['pre_handover'] ?? ''));
+        $formData['handover'] = trim((string) ($_POST['handover'] ?? ''));
+
+        if ($formData['property_id'] === '' || $formData['property_name'] === '' || $formData['address'] === '') {
+            throw new RuntimeException('Property ID, Property Name and Address are required.');
+        }
+
+        $isUpdate = $editingId !== null;
+
         if (!$conn->query('CREATE TABLE IF NOT EXISTS `area_details` (
                 `id` INT(11) NOT NULL AUTO_INCREMENT,
                 `property_id` VARCHAR(255) NOT NULL,
@@ -76,110 +283,172 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             throw new RuntimeException('Unable to ensure area_detail_files table exists: ' . $conn->error);
         }
 
+        if ($isUpdate) {
+            $existingData = $loadAreaDetail($conn, $editingId);
+            if ($existingData === null) {
+                throw new RuntimeException('Area detail not found.');
+            }
+        }
+
         if (!$conn->begin_transaction()) {
             throw new RuntimeException('Unable to start database transaction: ' . $conn->error);
         }
         $transactionStarted = true;
 
-        $propertyId = trim((string) ($_POST['property_id'] ?? ''));
-        $propertyName = trim((string) ($_POST['property_name'] ?? ''));
-        $address = trim((string) ($_POST['address'] ?? ''));
+        $amenitiesJson = $formData['amenities']
+            ? json_encode($formData['amenities'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)
+            : '';
+        $handoverDate = $formData['handover_date'];
+        $handoverDate3 = $formData['handover_date_3'];
 
-        if ($propertyId === '' || $propertyName === '' || $address === '') {
-            throw new RuntimeException('Property ID, Property Name and Address are required.');
+        $propertyId = $formData['property_id'];
+        $registrationNo = $formData['registration_no'];
+        $propertyName = $formData['property_name'];
+        $address = $formData['address'];
+        $projectName = $formData['project_name'];
+        $developerName = $formData['developer_name'];
+        $title = $formData['title'];
+        $aboutDetails = $formData['about_details'];
+        $aboutDeveloper = $formData['about_developer'];
+        $startingPrice = $formData['starting_price'];
+        $paymentPlan = $formData['payment_plan'];
+        $areaTitle = $formData['area_title'];
+        $areaHeading = $formData['area_heading'];
+        $areaDescription = $formData['area_description'];
+        $projectTitle2 = $formData['project_title_2'];
+        $projectTitle3 = $formData['project_title_3'];
+        $priceFrom = $formData['price_from'];
+        $location3 = $formData['location_3'];
+        $developmentTime = $formData['development_time'];
+        $projectDescription2 = $formData['project_description_2'];
+        $downPayment = $formData['down_payment'];
+        $preHandover = $formData['pre_handover'];
+        $handover = $formData['handover'];
+
+        if ($isUpdate) {
+            $updateSql = <<<'SQL'
+                UPDATE area_details
+                SET
+                    property_id = ?,
+                    registration_no = ?,
+                    property_name = ?,
+                    address = ?,
+                    project_name = ?,
+                    developer_name = ?,
+                    title = ?,
+                    about_details = ?,
+                    about_developer = ?,
+                    starting_price = ?,
+                    payment_plan = ?,
+                    handover_date = NULLIF(?, ''),
+                    area_title = ?,
+                    area_heading = ?,
+                    area_description = ?,
+                    amenities = NULLIF(?, ''),
+                    project_title_2 = ?,
+                    project_title_3 = ?,
+                    price_from = ?,
+                    handover_date_3 = NULLIF(?, ''),
+                    location_3 = ?,
+                    development_time = ?,
+                    project_description_2 = ?,
+                    down_payment = ?,
+                    pre_handover = ?,
+                    handover = ?
+                WHERE id = ?
+                SQL;
+            $stmt = $conn->prepare($updateSql);
+            if (!$stmt) {
+                throw new RuntimeException('Unable to prepare area details update: ' . $conn->error);
+            }
+
+            $stmt->bind_param(
+                str_repeat('s', 26) . 'i',
+                $propertyId,
+                $registrationNo,
+                $propertyName,
+                $address,
+                $projectName,
+                $developerName,
+                $title,
+                $aboutDetails,
+                $aboutDeveloper,
+                $startingPrice,
+                $paymentPlan,
+                $handoverDate,
+                $areaTitle,
+                $areaHeading,
+                $areaDescription,
+                $amenitiesJson,
+                $projectTitle2,
+                $projectTitle3,
+                $priceFrom,
+                $handoverDate3,
+                $location3,
+                $developmentTime,
+                $projectDescription2,
+                $downPayment,
+                $preHandover,
+                $handover,
+                $editingId
+            );
+        } else {
+            $insertSql = <<<'SQL'
+                INSERT INTO area_details (
+                    property_id, registration_no, property_name, address,
+                    project_name, developer_name, title, about_details,
+                    about_developer, starting_price, payment_plan, handover_date,
+                    area_title, area_heading, area_description, amenities,
+                    project_title_2, project_title_3, price_from, handover_date_3,
+                    location_3, development_time, project_description_2, down_payment,
+                    pre_handover, handover
+                ) VALUES (
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULLIF(?, ''),
+                    ?, ?, ?, NULLIF(?, ''), ?, ?, ?, NULLIF(?, ''),
+                    ?, ?, ?, ?, ?, ?
+                )
+                SQL;
+            $stmt = $conn->prepare($insertSql);
+            if (!$stmt) {
+                throw new RuntimeException('Unable to prepare area details insert: ' . $conn->error);
+            }
+
+            $stmt->bind_param(
+                str_repeat('s', 26),
+                $propertyId,
+                $registrationNo,
+                $propertyName,
+                $address,
+                $projectName,
+                $developerName,
+                $title,
+                $aboutDetails,
+                $aboutDeveloper,
+                $startingPrice,
+                $paymentPlan,
+                $handoverDate,
+                $areaTitle,
+                $areaHeading,
+                $areaDescription,
+                $amenitiesJson,
+                $projectTitle2,
+                $projectTitle3,
+                $priceFrom,
+                $handoverDate3,
+                $location3,
+                $developmentTime,
+                $projectDescription2,
+                $downPayment,
+                $preHandover,
+                $handover
+            );
         }
-
-        $registrationNo = trim((string) ($_POST['registration_no'] ?? ''));
-        $projectName = trim((string) ($_POST['project_name'] ?? ''));
-        $developerName = trim((string) ($_POST['developer_name'] ?? ''));
-        $title = trim((string) ($_POST['title'] ?? ''));
-        $aboutDetails = trim((string) ($_POST['about_details'] ?? ''));
-        $aboutDeveloper = trim((string) ($_POST['about_developer'] ?? ''));
-        $startingPrice = trim((string) ($_POST['starting_price'] ?? ''));
-        $paymentPlan = trim((string) ($_POST['payment_plan'] ?? ''));
-        $handoverDate = $normalizeDate($_POST['handover_date'] ?? null);
-        $areaTitle = trim((string) ($_POST['area_title'] ?? ''));
-        $areaHeading = trim((string) ($_POST['area_heading'] ?? ''));
-        $areaDescription = trim((string) ($_POST['area_description'] ?? ''));
-
-        $amenitiesRaw = $_POST['amenities'] ?? [];
-        if (!is_array($amenitiesRaw)) {
-            $amenitiesRaw = [];
-        }
-        $amenities = array_values(array_filter(array_map(static function ($item) {
-            return trim((string) $item);
-        }, $amenitiesRaw), static function ($value) {
-            return $value !== '';
-        }));
-        $amenitiesJson = $amenities ? json_encode($amenities, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) : '';
-
-        $projectTitle2 = trim((string) ($_POST['project_title_2'] ?? ''));
-        $projectTitle3 = trim((string) ($_POST['project_title_3'] ?? ''));
-        $priceFrom = trim((string) ($_POST['price_from'] ?? ''));
-        $handoverDate3 = $normalizeDate($_POST['handover_date_3'] ?? null);
-        $location3 = trim((string) ($_POST['location_3'] ?? ''));
-        $developmentTime = trim((string) ($_POST['development_time'] ?? ''));
-        $projectDescription2 = trim((string) ($_POST['project_description_2'] ?? ''));
-        $downPayment = trim((string) ($_POST['down_payment'] ?? ''));
-        $preHandover = trim((string) ($_POST['pre_handover'] ?? ''));
-        $handover = trim((string) ($_POST['handover'] ?? ''));
-
-        $insertSql = <<<'SQL'
-            INSERT INTO area_details (
-                property_id, registration_no, property_name, address,
-                project_name, developer_name, title, about_details,
-                about_developer, starting_price, payment_plan, handover_date,
-                area_title, area_heading, area_description, amenities,
-                project_title_2, project_title_3, price_from, handover_date_3,
-                location_3, development_time, project_description_2, down_payment,
-                pre_handover, handover
-            ) VALUES (
-                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULLIF(?, ''),
-                ?, ?, ?, NULLIF(?, ''), ?, ?, ?, NULLIF(?, ''),
-                ?, ?, ?, ?, ?, ?
-            )
-            SQL;
-
-        $stmt = $conn->prepare($insertSql);
-        if (!$stmt) {
-            throw new RuntimeException('Unable to prepare area details insert: ' . $conn->error);
-        }
-
-        $stmt->bind_param(
-            str_repeat('s', 26),
-            $propertyId,
-            $registrationNo,
-            $propertyName,
-            $address,
-            $projectName,
-            $developerName,
-            $title,
-            $aboutDetails,
-            $aboutDeveloper,
-            $startingPrice,
-            $paymentPlan,
-            $handoverDate,
-            $areaTitle,
-            $areaHeading,
-            $areaDescription,
-            $amenitiesJson,
-            $projectTitle2,
-            $projectTitle3,
-            $priceFrom,
-            $handoverDate3,
-            $location3,
-            $developmentTime,
-            $projectDescription2,
-            $downPayment,
-            $preHandover,
-            $handover
-        );
 
         if (!$stmt->execute()) {
             throw new RuntimeException('Unable to save area details: ' . $stmt->error);
         }
 
-        $areaDetailId = (int) $stmt->insert_id;
+        $areaDetailId = $isUpdate ? $editingId : (int) $stmt->insert_id;
         $stmt->close();
 
         $fileStmt = $conn->prepare('INSERT INTO area_detail_files (
@@ -283,7 +552,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         $conn->commit();
-        $successMessage = 'Area details saved successfully.';
+        $successMessage = $isUpdate ? 'Area details updated successfully.' : 'Area details saved successfully.';
+        if ($isUpdate) {
+            $editingId = $areaDetailId;
+        } else {
+            $formData = $defaultFormData;
+            $editingId = null;
+        }
         $_POST = [];
         $_FILES = [];
     } catch (Throwable $exception) {
@@ -328,6 +603,7 @@ require_once __DIR__ . '/includes/common-header.php';
                 <?php endif; ?>
 
                 <form class="hh-area-form" action="<?php echo htmlspecialchars($_SERVER['REQUEST_URI'], ENT_QUOTES, 'UTF-8'); ?>" method="post" enctype="multipart/form-data" novalidate>
+                    <input type="hidden" name="area_detail_id" value="<?php echo $editingId !== null ? $escapeHtml((string) $editingId) : ''; ?>">
                     <div class="form-section">
 
                         <div class="form-wrap">
@@ -339,7 +615,7 @@ require_once __DIR__ . '/includes/common-header.php';
                                 <h1>Project Information</h1>
                             </div>
                             <div class="page-sub">
-                                Enter comprehensive property and area information
+                                <?php echo $editingId !== null ? 'Update property and area information' : 'Enter comprehensive property and area information'; ?>
                             </div>
 
                             <!-- Two columns -->
@@ -360,7 +636,7 @@ require_once __DIR__ . '/includes/common-header.php';
                                                     <div class="field">
                                                         <label for="propertyId">Property ID <span class="req">*</span></label>
                                                         <!-- Field: property_id -->
-                                                        <input type="text" id="propertyId" name="property_id" required>
+                                                        <input type="text" id="propertyId" name="property_id" required value="<?php echo $escapeHtml($formData['property_id']); ?>">
                                                     </div>
                                                 </div>
 
@@ -368,7 +644,7 @@ require_once __DIR__ . '/includes/common-header.php';
                                                     <div class="field">
                                                         <label for="regNo">Registration No.</label>
                                                         <!-- Field: registration_no -->
-                                                        <input type="text" id="regNo" name="registration_no">
+                                                        <input type="text" id="regNo" name="registration_no" value="<?php echo $escapeHtml($formData['registration_no']); ?>">
                                                     </div>
                                                 </div>
 
@@ -376,7 +652,7 @@ require_once __DIR__ . '/includes/common-header.php';
                                                     <div class="field">
                                                         <label for="propName">Property Name <span class="req">*</span></label>
                                                         <!-- Field: property_name -->
-                                                        <input type="text" id="propName" name="property_name" required>
+                                                        <input type="text" id="propName" name="property_name" required value="<?php echo $escapeHtml($formData['property_name']); ?>">
                                                     </div>
                                                 </div>
 
@@ -384,7 +660,7 @@ require_once __DIR__ . '/includes/common-header.php';
                                                     <div class="field">
                                                         <label for="address">Full Address <span class="req">*</span></label>
                                                         <!-- Field: address -->
-                                                        <textarea id="address" name="address" required></textarea>
+                                                        <textarea id="address" name="address" required><?php echo $escapeHtml($formData['address']); ?></textarea>
                                                     </div>
                                                 </div>
                                             </div>
@@ -431,7 +707,7 @@ require_once __DIR__ . '/includes/common-header.php';
                                                 <div class="col-12">
                                                     <div class="field">
                                                         <label for="projectName">Project Name</label>
-                                                        <input type="text" id="projectName" name="project_name">
+                                                        <input type="text" id="projectName" name="project_name" value="<?php echo $escapeHtml($formData['project_name']); ?>">
                                                     </div>
                                                 </div>
 
@@ -439,7 +715,7 @@ require_once __DIR__ . '/includes/common-header.php';
                                                 <div class="col-12">
                                                     <div class="field">
                                                         <label for="developerName">Developer Name</label>
-                                                        <input type="text" id="developerName" name="developer_name">
+                                                        <input type="text" id="developerName" name="developer_name" value="<?php echo $escapeHtml($formData['developer_name']); ?>">
                                                     </div>
                                                 </div>
                                             </div>
@@ -462,7 +738,7 @@ require_once __DIR__ . '/includes/common-header.php';
                                                 <div class="col-12">
                                                     <div class="field">
                                                         <label for="pageTitle">Title</label>
-                                                        <input type="text" id="pageTitle" name="title">
+                                                        <input type="text" id="pageTitle" name="title" value="<?php echo $escapeHtml($formData['title']); ?>">
                                                     </div>
                                                 </div>
 
@@ -470,7 +746,7 @@ require_once __DIR__ . '/includes/common-header.php';
                                                 <div class="col-12">
                                                     <div class="field">
                                                         <label for="aboutDetails">About Project – Detailed Description</label>
-                                                        <textarea id="aboutDetails" name="about_details"></textarea>
+                                                        <textarea id="aboutDetails" name="about_details"><?php echo $escapeHtml($formData['about_details']); ?></textarea>
                                                     </div>
                                                 </div>
 
@@ -478,7 +754,7 @@ require_once __DIR__ . '/includes/common-header.php';
                                                 <div class="col-12">
                                                     <div class="field">
                                                         <label for="aboutDeveloper">About the Developer</label>
-                                                        <textarea id="aboutDeveloper" name="about_developer"></textarea>
+                                                        <textarea id="aboutDeveloper" name="about_developer"><?php echo $escapeHtml($formData['about_developer']); ?></textarea>
                                                     </div>
                                                 </div>
                                             </div>
@@ -501,7 +777,7 @@ require_once __DIR__ . '/includes/common-header.php';
                                                 <div class="col-12">
                                                     <div class="field">
                                                         <label for="startingPrice">Starting Price</label>
-                                                        <input type="text" id="startingPrice" name="starting_price">
+                                                        <input type="text" id="startingPrice" name="starting_price" value="<?php echo $escapeHtml($formData['starting_price']); ?>">
                                                     </div>
                                                 </div>
 
@@ -509,7 +785,7 @@ require_once __DIR__ . '/includes/common-header.php';
                                                 <div class="col-12">
                                                     <div class="field">
                                                         <label for="paymentPlan">Payment Plan</label>
-                                                        <input type="text" id="paymentPlan" name="payment_plan">
+                                                        <input type="text" id="paymentPlan" name="payment_plan" value="<?php echo $escapeHtml($formData['payment_plan']); ?>">
                                                     </div>
                                                 </div>
 
@@ -517,7 +793,7 @@ require_once __DIR__ . '/includes/common-header.php';
                                                 <div class="col-12">
                                                     <div class="field">
                                                         <label for="handoverDate">Handover Date</label>
-                                                        <input type="date" id="handoverDate" name="handover_date">
+                                                        <input type="date" id="handoverDate" name="handover_date" value="<?php echo $escapeHtml($formData['handover_date']); ?>">
                                                     </div>
                                                 </div>
                                             </div>
@@ -562,7 +838,7 @@ require_once __DIR__ . '/includes/common-header.php';
                                                 <div class="col-12 col-lg-6">
                                                     <div class="field">
                                                         <label for="areaTitle">Area Title</label>
-                                                        <input type="text" id="areaTitle" name="area_title">
+                                                        <input type="text" id="areaTitle" name="area_title" value="<?php echo $escapeHtml($formData['area_title']); ?>">
                                                     </div>
                                                 </div>
 
@@ -570,7 +846,7 @@ require_once __DIR__ . '/includes/common-header.php';
                                                 <div class="col-12 col-lg-6">
                                                     <div class="field">
                                                         <label for="areaHeading">Area Heading</label>
-                                                        <input type="text" id="areaHeading" name="area_heading">
+                                                        <input type="text" id="areaHeading" name="area_heading" value="<?php echo $escapeHtml($formData['area_heading']); ?>">
                                                     </div>
                                                 </div>
 
@@ -578,7 +854,7 @@ require_once __DIR__ . '/includes/common-header.php';
                                                 <div class="col-12">
                                                     <div class="field">
                                                         <label for="areaDescription">Area Description</label>
-                                                        <textarea id="areaDescription" name="area_description"></textarea>
+                                                        <textarea id="areaDescription" name="area_description"><?php echo $escapeHtml($formData['area_description']); ?></textarea>
                                                     </div>
                                                 </div>
                                             </div>
@@ -602,7 +878,7 @@ require_once __DIR__ . '/includes/common-header.php';
                                             <div class="row amenity-tabs">
                                                 <div class="col-12 col-sm-6 col-lg-4">
                                                     <div class="amenity-tab">
-                                                        <input type="checkbox" id="am-swimming" name="amenities[]" value="swimming_pool" class="amenity-input">
+                                                        <input type="checkbox" id="am-swimming" name="amenities[]" value="swimming_pool" class="amenity-input"<?php echo $amenityChecked($formData['amenities'], 'swimming_pool'); ?>>
                                                         <label for="am-swimming" class="amenity-btn">
                                                             <span class="amenity-text">Swimming Pool</span>
                                                         </label>
@@ -611,7 +887,7 @@ require_once __DIR__ . '/includes/common-header.php';
 
                                                 <div class="col-12 col-sm-6 col-lg-4">
                                                     <div class="amenity-tab">
-                                                        <input type="checkbox" id="am-gym" name="amenities[]" value="gymnasium" class="amenity-input">
+                                                        <input type="checkbox" id="am-gym" name="amenities[]" value="gymnasium" class="amenity-input"<?php echo $amenityChecked($formData['amenities'], 'gymnasium'); ?>>
                                                         <label for="am-gym" class="amenity-btn">
                                                             <span class="amenity-text">Gymnasium</span>
                                                         </label>
@@ -620,7 +896,7 @@ require_once __DIR__ . '/includes/common-header.php';
 
                                                 <div class="col-12 col-sm-6 col-lg-4">
                                                     <div class="amenity-tab">
-                                                        <input type="checkbox" id="am-kids" name="amenities[]" value="kids_play_area" class="amenity-input">
+                                                        <input type="checkbox" id="am-kids" name="amenities[]" value="kids_play_area" class="amenity-input"<?php echo $amenityChecked($formData['amenities'], 'kids_play_area'); ?>>
                                                         <label for="am-kids" class="amenity-btn">
                                                             <span class="amenity-text">Kid’s Play Area</span>
                                                         </label>
@@ -629,7 +905,7 @@ require_once __DIR__ . '/includes/common-header.php';
 
                                                 <div class="col-12 col-sm-6 col-lg-4">
                                                     <div class="amenity-tab">
-                                                        <input type="checkbox" id="am-jog" name="amenities[]" value="jogging_area" class="amenity-input">
+                                                        <input type="checkbox" id="am-jog" name="amenities[]" value="jogging_area" class="amenity-input"<?php echo $amenityChecked($formData['amenities'], 'jogging_area'); ?>>
                                                         <label for="am-jog" class="amenity-btn">
                                                             <span class="amenity-text">Jogging Area</span>
                                                         </label>
@@ -638,7 +914,7 @@ require_once __DIR__ . '/includes/common-header.php';
 
                                                 <div class="col-12 col-sm-6 col-lg-4">
                                                     <div class="amenity-tab">
-                                                        <input type="checkbox" id="am-garden" name="amenities[]" value="garden_zones" class="amenity-input">
+                                                        <input type="checkbox" id="am-garden" name="amenities[]" value="garden_zones" class="amenity-input"<?php echo $amenityChecked($formData['amenities'], 'garden_zones'); ?>>
                                                         <label for="am-garden" class="amenity-btn">
                                                             <span class="amenity-text">Garden Zones</span>
                                                         </label>
@@ -647,7 +923,7 @@ require_once __DIR__ . '/includes/common-header.php';
 
                                                 <div class="col-12 col-sm-6 col-lg-4">
                                                     <div class="amenity-tab">
-                                                        <input type="checkbox" id="am-sports" name="amenities[]" value="sports_courts" class="amenity-input">
+                                                        <input type="checkbox" id="am-sports" name="amenities[]" value="sports_courts" class="amenity-input"<?php echo $amenityChecked($formData['amenities'], 'sports_courts'); ?>>
                                                         <label for="am-sports" class="amenity-btn">
                                                             <span class="amenity-text">Sports Courts</span>
                                                         </label>
@@ -656,7 +932,7 @@ require_once __DIR__ . '/includes/common-header.php';
 
                                                 <div class="col-12 col-sm-6 col-lg-4">
                                                     <div class="amenity-tab">
-                                                        <input type="checkbox" id="am-sauna" name="amenities[]" value="sauna_steam_rooms" class="amenity-input">
+                                                        <input type="checkbox" id="am-sauna" name="amenities[]" value="sauna_steam_rooms" class="amenity-input"<?php echo $amenityChecked($formData['amenities'], 'sauna_steam_rooms'); ?>>
                                                         <label for="am-sauna" class="amenity-btn">
                                                             <span class="amenity-text">Sauna & Steam Rooms</span>
                                                         </label>
@@ -665,7 +941,7 @@ require_once __DIR__ . '/includes/common-header.php';
 
                                                 <div class="col-12 col-sm-6 col-lg-4">
                                                     <div class="amenity-tab">
-                                                        <input type="checkbox" id="am-yoga" name="amenities[]" value="yoga_meditation_decks" class="amenity-input">
+                                                        <input type="checkbox" id="am-yoga" name="amenities[]" value="yoga_meditation_decks" class="amenity-input"<?php echo $amenityChecked($formData['amenities'], 'yoga_meditation_decks'); ?>>
                                                         <label for="am-yoga" class="amenity-btn">
                                                             <span class="amenity-text">Yoga & Meditation Decks</span>
                                                         </label>
@@ -674,7 +950,7 @@ require_once __DIR__ . '/includes/common-header.php';
 
                                                 <div class="col-12 col-sm-6 col-lg-4">
                                                     <div class="amenity-tab">
-                                                        <input type="checkbox" id="am-bbq" name="amenities[]" value="bbq_areas" class="amenity-input">
+                                                        <input type="checkbox" id="am-bbq" name="amenities[]" value="bbq_areas" class="amenity-input"<?php echo $amenityChecked($formData['amenities'], 'bbq_areas'); ?>>
                                                         <label for="am-bbq" class="amenity-btn">
                                                             <span class="amenity-text">BBQ Areas</span>
                                                         </label>
@@ -704,7 +980,7 @@ require_once __DIR__ . '/includes/common-header.php';
                                                 <div class="col-12 col-lg-6">
                                                     <div class="field">
                                                         <label for="projectTitle2">Project Title 2</label>
-                                                        <input type="text" id="projectTitle2" name="project_title_2">
+                                                        <input type="text" id="projectTitle2" name="project_title_2" value="<?php echo $escapeHtml($formData['project_title_2']); ?>">
                                                     </div>
                                                 </div>
 
@@ -714,7 +990,7 @@ require_once __DIR__ . '/includes/common-header.php';
                                                 <div class="col-12 col-lg-6">
                                                     <div class="field">
                                                         <label for="projectTitle3">Project Title 3</label>
-                                                        <input type="text" id="projectTitle3" name="project_title_3">
+                                                        <input type="text" id="projectTitle3" name="project_title_3" value="<?php echo $escapeHtml($formData['project_title_3']); ?>">
                                                     </div>
                                                 </div>
 
@@ -722,7 +998,7 @@ require_once __DIR__ . '/includes/common-header.php';
                                                 <div class="col-12 col-lg-6">
                                                     <div class="field">
                                                         <label for="priceFrom">Price From</label>
-                                                        <input type="text" id="priceFrom" name="price_from">
+                                                        <input type="text" id="priceFrom" name="price_from" value="<?php echo $escapeHtml($formData['price_from']); ?>">
                                                     </div>
                                                 </div>
 
@@ -730,7 +1006,7 @@ require_once __DIR__ . '/includes/common-header.php';
                                                 <div class="col-12 col-lg-6">
                                                     <div class="field">
                                                         <label for="handoverDate3">Hand Over Date</label>
-                                                        <input type="date" id="handoverDate3" name="handover_date_3">
+                                                        <input type="date" id="handoverDate3" name="handover_date_3" value="<?php echo $escapeHtml($formData['handover_date_3']); ?>">
                                                     </div>
                                                 </div>
 
@@ -738,7 +1014,7 @@ require_once __DIR__ . '/includes/common-header.php';
                                                 <div class="col-12 col-lg-6">
                                                     <div class="field">
                                                         <label for="location3">Location</label>
-                                                        <input type="text" id="location3" name="location_3">
+                                                        <input type="text" id="location3" name="location_3" value="<?php echo $escapeHtml($formData['location_3']); ?>">
                                                     </div>
                                                 </div>
 
@@ -746,7 +1022,7 @@ require_once __DIR__ . '/includes/common-header.php';
                                                 <div class="col-12 col-lg-6">
                                                     <div class="field">
                                                         <label for="developmentTime">Development Time</label>
-                                                        <input type="text" id="developmentTime" name="development_time">
+                                                        <input type="text" id="developmentTime" name="development_time" value="<?php echo $escapeHtml($formData['development_time']); ?>">
                                                     </div>
                                                 </div>
 
@@ -775,7 +1051,7 @@ require_once __DIR__ . '/includes/common-header.php';
                                                 <div class="col-12 col-lg-12">
                                                     <div class="field">
                                                         <label for="projectDescription2">Project Description 2</label>
-                                                        <textarea id="projectDescription2" name="project_description_2"></textarea>
+                                                        <textarea id="projectDescription2" name="project_description_2"><?php echo $escapeHtml($formData['project_description_2']); ?></textarea>
                                                     </div>
                                                 </div>
 
@@ -800,7 +1076,7 @@ require_once __DIR__ . '/includes/common-header.php';
                                                 <div class="col-12 col-lg-4">
                                                     <div class="field">
                                                         <label for="downPayment">Down Payment</label>
-                                                        <input type="text" id="downPayment" name="down_payment">
+                                                        <input type="text" id="downPayment" name="down_payment" value="<?php echo $escapeHtml($formData['down_payment']); ?>">
                                                     </div>
                                                 </div>
 
@@ -808,7 +1084,7 @@ require_once __DIR__ . '/includes/common-header.php';
                                                 <div class="col-12 col-lg-4">
                                                     <div class="field">
                                                         <label for="preHandover">Pre Handover</label>
-                                                        <input type="text" id="preHandover" name="pre_handover">
+                                                        <input type="text" id="preHandover" name="pre_handover" value="<?php echo $escapeHtml($formData['pre_handover']); ?>">
                                                     </div>
                                                 </div>
 
@@ -816,7 +1092,7 @@ require_once __DIR__ . '/includes/common-header.php';
                                                 <div class="col-12 col-lg-4">
                                                     <div class="field">
                                                         <label for="handover">Handover</label>
-                                                        <input type="text" id="handover" name="handover">
+                                                        <input type="text" id="handover" name="handover" value="<?php echo $escapeHtml($formData['handover']); ?>">
                                                     </div>
                                                 </div>
 
