@@ -316,12 +316,12 @@ require_once __DIR__ . '/includes/common-header.php';
             <!-- Dashboard Content -->
             <div class="p-2">
                 <?php if ($successMessage): ?>
-                    <div class="alert alert-success alert-dismissible fade show" role="alert">
+                    <div class="alert alert-success alert-dismissible fade show" role="alert" data-auto-dismiss="5000">
                         <?php echo htmlspecialchars($successMessage, ENT_QUOTES, 'UTF-8'); ?>
                         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                     </div>
                 <?php elseif ($errorMessage): ?>
-                    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                    <div class="alert alert-danger alert-dismissible fade show" role="alert" data-auto-dismiss="5000">
                         <?php echo htmlspecialchars($errorMessage, ENT_QUOTES, 'UTF-8'); ?>
                         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                     </div>
