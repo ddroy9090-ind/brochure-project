@@ -3,9 +3,49 @@
 
 // 1) Auth guard MUST be first (no output before this)
 require_once __DIR__ . '/includes/auth_check.php';
+require_once __DIR__ . '/includes/db.php';
 
 // 2) Optional: page title for your header include
-$pageTitle = 'Dashboard';
+$pageTitle = 'Document Library';
+
+$areaDetails = [];
+$loadError = null;
+
+$tableCheck = $conn->query("SHOW TABLES LIKE 'area_details'");
+if ($tableCheck === false) {
+    $loadError = 'Unable to load area details.';
+} else {
+    $tableExists = $tableCheck->num_rows > 0;
+    $tableCheck->free();
+
+    if ($tableExists) {
+        $sql = <<<'SQL'
+            SELECT
+                id,
+                property_id,
+                property_name,
+                address,
+                area_title,
+                created_at
+            FROM area_details
+            ORDER BY created_at DESC, id DESC
+            SQL;
+
+        $result = $conn->query($sql);
+        if ($result === false) {
+            $loadError = 'Unable to load area details.';
+        } else {
+            while ($row = $result->fetch_assoc()) {
+                $areaDetails[] = $row;
+            }
+            $result->free();
+        }
+    }
+}
+
+$totalDocuments = count($areaDetails);
+$activeDocuments = $totalDocuments;
+$archivedDocuments = 0;
 
 // 3) Common header (HTML <head>, opening <body>, etc.)
 require_once __DIR__ . '/includes/common-header.php';
@@ -49,9 +89,9 @@ require_once __DIR__ . '/includes/common-header.php';
                                     </div>
 
                                     <div class="dl-tabs">
-                                        <button class="dl-tab is-active" data-filter="all">All (2)</button>
-                                        <button class="dl-tab" data-filter="active">Active (2)</button>
-                                        <button class="dl-tab" data-filter="archived">Archived (0)</button>
+                                        <button class="dl-tab is-active" data-filter="all">All (<?php echo $totalDocuments; ?>)</button>
+                                        <button class="dl-tab" data-filter="active">Active (<?php echo $activeDocuments; ?>)</button>
+                                        <button class="dl-tab" data-filter="archived">Archived (<?php echo $archivedDocuments; ?>)</button>
                                     </div>
                                 </div>
                             </div>
@@ -78,43 +118,84 @@ require_once __DIR__ . '/includes/common-header.php';
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                <!-- Row 1 -->
-                                                <tr>
-                                                    <td>
-                                                        <div class="prop-title">Green Valley Apartments</div>
-                                                        <div class="prop-meta">ID: PROP-001</div>
-                                                        <div class="prop-meta prop-loc">
-                                                            <img src="assets/icons/location.png" alt="">
-                                                            123 Main Street, Sector 15, New Mumbai
-                                                        </div>
-                                                    </td>
-                                                    <td>
-                                                        <div class="area-size">Area Title</div>
-                                                    </td>
-                                                    
-                                                    <td>
-                                                        <div class="date-wrap">
-                                                            <img src="assets/icons/calendar.png" alt="">
-                                                            <span>9/10/2024</span>
-                                                        </div>
-                                                    </td>
-                                                    
-                                                    <td class="td-actions">
-                                                        <button class="act-btn" aria-label="Edit">
-                                                            <img src="assets/icons/edit.png" alt="">
-                                                        </button>
-                                                        <button class="act-btn" aria-label="View">
-                                                            <img src="assets/icons/eye.png" alt="">
-                                                        </button>
-                                                        <button class="act-btn" aria-label="Download">
-                                                            <img src="assets/icons/download.png" alt="">
-                                                        </button>
-                                                        <button class="act-btn danger" aria-label="Delete">
-                                                            <img src="assets/icons/trash.png" alt="">
-                                                        </button>
-                                                    </td>
-                                                </tr>
+                                                <?php if ($loadError): ?>
+                                                    <tr>
+                                                        <td colspan="4" class="text-center text-danger">
+                                                            <?php echo htmlspecialchars($loadError, ENT_QUOTES, 'UTF-8'); ?>
+                                                        </td>
+                                                    </tr>
+                                                <?php elseif (!$areaDetails): ?>
+                                                    <tr>
+                                                        <td colspan="4" class="text-center text-muted">
+                                                            No area details found yet.
+                                                        </td>
+                                                    </tr>
+                                                <?php else: ?>
+                                                    <?php foreach ($areaDetails as $detail): ?>
+                                                        <?php
+                                                        $propertyName = trim((string) ($detail['property_name'] ?? ''));
+                                                        if ($propertyName === '') {
+                                                            $propertyName = 'Untitled Property';
+                                                        }
 
+                                                        $propertyId = trim((string) ($detail['property_id'] ?? ''));
+                                                        $address = trim((string) ($detail['address'] ?? ''));
+                                                        $areaTitle = trim((string) ($detail['area_title'] ?? ''));
+                                                        $createdRaw = trim((string) ($detail['created_at'] ?? ''));
+                                                        $createdDisplay = '—';
+
+                                                        if ($createdRaw !== '') {
+                                                            $timestamp = strtotime($createdRaw);
+                                                            if ($timestamp !== false) {
+                                                                $createdDisplay = date('n/j/Y', $timestamp);
+                                                            } else {
+                                                                $createdDisplay = $createdRaw;
+                                                            }
+                                                        }
+                                                        ?>
+                                                        <tr>
+                                                            <td>
+                                                                <div class="prop-title"><?php echo htmlspecialchars($propertyName, ENT_QUOTES, 'UTF-8'); ?></div>
+                                                                <?php if ($propertyId !== ''): ?>
+                                                                    <div class="prop-meta">ID: <?php echo htmlspecialchars($propertyId, ENT_QUOTES, 'UTF-8'); ?></div>
+                                                                <?php endif; ?>
+                                                                <?php if ($address !== ''): ?>
+                                                                    <div class="prop-meta prop-loc">
+                                                                        <img src="assets/icons/location.png" alt="">
+                                                                        <?php echo htmlspecialchars($address, ENT_QUOTES, 'UTF-8'); ?>
+                                                                    </div>
+                                                                <?php endif; ?>
+                                                            </td>
+                                                            <td>
+                                                                <div class="area-size">
+                                                                    <?php echo $areaTitle !== '' ? htmlspecialchars($areaTitle, ENT_QUOTES, 'UTF-8') : '<span class="text-muted">—</span>'; ?>
+                                                                </div>
+                                                            </td>
+
+                                                            <td>
+                                                                <div class="date-wrap">
+                                                                    <img src="assets/icons/calendar.png" alt="">
+                                                                    <span><?php echo htmlspecialchars($createdDisplay, ENT_QUOTES, 'UTF-8'); ?></span>
+                                                                </div>
+                                                            </td>
+
+                                                            <td class="td-actions">
+                                                                <button class="act-btn" aria-label="Edit">
+                                                                    <img src="assets/icons/edit.png" alt="">
+                                                                </button>
+                                                                <button class="act-btn" aria-label="View">
+                                                                    <img src="assets/icons/eye.png" alt="">
+                                                                </button>
+                                                                <button class="act-btn" aria-label="Download">
+                                                                    <img src="assets/icons/download.png" alt="">
+                                                                </button>
+                                                                <button class="act-btn danger" aria-label="Delete">
+                                                                    <img src="assets/icons/trash.png" alt="">
+                                                                </button>
+                                                            </td>
+                                                        </tr>
+                                                    <?php endforeach; ?>
+                                                <?php endif; ?>
                                             </tbody>
                                         </table>
                                     </div>
