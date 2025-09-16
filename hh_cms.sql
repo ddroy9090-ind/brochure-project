@@ -46,6 +46,64 @@ INSERT INTO `adminusers` (`id`, `name`, `email`, `password`, `profile_hash`, `ve
 (1, 'Admin', 'admin@gmail.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', NULL, NULL, NULL, '2025-09-15 11:22:59'),
 (3, 'Shoaib Akhtar', 'shoaib@reliantsurveyors.com', '$2y$10$eBQK2Xqx2mqwTB42sCg90eqQaWWpqQhycUedxTcJhFcKXO/HfClno', NULL, NULL, NULL, '2025-09-15 12:24:23');
 
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `area_details`
+--
+
+CREATE TABLE `area_details` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `property_id` varchar(255) NOT NULL,
+  `registration_no` varchar(255) DEFAULT NULL,
+  `property_name` varchar(255) NOT NULL,
+  `address` text NOT NULL,
+  `project_name` varchar(255) DEFAULT NULL,
+  `developer_name` varchar(255) DEFAULT NULL,
+  `title` varchar(255) DEFAULT NULL,
+  `about_details` longtext DEFAULT NULL,
+  `about_developer` longtext DEFAULT NULL,
+  `starting_price` varchar(255) DEFAULT NULL,
+  `payment_plan` varchar(255) DEFAULT NULL,
+  `handover_date` date DEFAULT NULL,
+  `area_title` varchar(255) DEFAULT NULL,
+  `area_heading` varchar(255) DEFAULT NULL,
+  `area_description` longtext DEFAULT NULL,
+  `amenities` longtext DEFAULT NULL,
+  `project_title_2` varchar(255) DEFAULT NULL,
+  `project_title_3` varchar(255) DEFAULT NULL,
+  `price_from` varchar(255) DEFAULT NULL,
+  `handover_date_3` date DEFAULT NULL,
+  `location_3` varchar(255) DEFAULT NULL,
+  `development_time` varchar(255) DEFAULT NULL,
+  `project_description_2` longtext DEFAULT NULL,
+  `down_payment` varchar(255) DEFAULT NULL,
+  `pre_handover` varchar(255) DEFAULT NULL,
+  `handover` varchar(255) DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `area_detail_files`
+--
+
+CREATE TABLE `area_detail_files` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `area_detail_id` int(11) NOT NULL,
+  `file_key` varchar(100) NOT NULL,
+  `file_name` varchar(255) DEFAULT NULL,
+  `mime_type` varchar(150) DEFAULT NULL,
+  `file_size` int(11) DEFAULT NULL,
+  `file_data` longblob NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `fk_area_detail` (`area_detail_id`),
+  CONSTRAINT `fk_area_detail` FOREIGN KEY (`area_detail_id`) REFERENCES `area_details` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
 --
 -- Indexes for dumped tables
 --
