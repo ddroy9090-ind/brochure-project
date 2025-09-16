@@ -1114,3 +1114,231 @@ body {
 .hh-area-form .upload-box.sm {
     min-height: 140px;
 }
+
+/* ===== Property Detail View ===== */
+.property-view {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding-bottom: 32px;
+}
+
+.property-view__back {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 600;
+    color: #004a44;
+    text-decoration: none;
+    margin-bottom: 18px;
+    transition: color 0.2s ease;
+}
+
+.property-view__back:hover,
+.property-view__back:focus {
+    color: #02685f;
+    text-decoration: underline;
+}
+
+.detail-section {
+    background: #ffffff;
+    border-radius: 20px;
+    padding: 24px;
+    margin-bottom: 24px;
+    box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+}
+
+.detail-section--intro {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+.detail-section__header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.detail-section__header h1,
+.detail-section__header h2 {
+    margin: 0;
+    font-weight: 600;
+    color: #0f172a;
+}
+
+.property-view__title {
+    font-size: 30px;
+    line-height: 1.2;
+}
+
+.property-view__actions {
+    display: flex;
+    gap: 10px;
+}
+
+.detail-section__subtitle {
+    margin: 0;
+    flex-basis: 100%;
+    color: #64748b;
+    font-size: 0.95rem;
+}
+
+.property-view__meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    color: #475569;
+    font-size: 0.95rem;
+}
+
+.property-view__meta span {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.property-view__meta span strong {
+    color: #0f172a;
+    font-weight: 600;
+}
+
+.property-view__address {
+    background: #f1f5f9;
+    border-radius: 14px;
+    padding: 16px 18px;
+    color: #1f2937;
+    line-height: 1.6;
+    font-size: 1rem;
+}
+
+.detail-field {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    padding: 16px 18px;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.detail-label {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #64748b;
+}
+
+.detail-value {
+    color: #0f172a;
+    font-size: 1.02rem;
+    line-height: 1.6;
+    word-break: break-word;
+}
+
+.detail-amenities {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 8px;
+}
+
+.detail-amenities__item {
+    background: rgba(0, 74, 68, 0.1);
+    color: #004a44;
+    padding: 6px 14px;
+    border-radius: 999px;
+    font-weight: 600;
+    font-size: 0.95rem;
+}
+
+.detail-media-group + .detail-media-group {
+    margin-top: 24px;
+}
+
+.detail-media-group__title {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: #0f172a;
+    margin-bottom: 12px;
+}
+
+.detail-media-items {
+    display: grid;
+    gap: 16px;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.detail-media-card {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    padding: 12px;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    height: 100%;
+}
+
+.detail-media-card img {
+    width: 100%;
+    border-radius: 10px;
+    object-fit: cover;
+}
+
+.detail-media-card figcaption {
+    font-size: 0.9rem;
+    color: #334155;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.detail-media-name {
+    font-weight: 600;
+}
+
+.detail-media-size {
+    color: #64748b;
+}
+
+.detail-media-card--file {
+    justify-content: space-between;
+}
+
+.detail-media-download {
+    margin-top: auto;
+    align-self: flex-start;
+    font-weight: 600;
+    color: #004a44;
+    text-decoration: none;
+    transition: color 0.2s ease;
+}
+
+.detail-media-download:hover,
+.detail-media-download:focus {
+    color: #02685f;
+    text-decoration: underline;
+}
+
+@media (max-width: 767.98px) {
+    .detail-media-items {
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    }
+}
+
+@media (max-width: 575.98px) {
+    .property-view__meta {
+        flex-direction: column;
+        gap: 6px;
+        align-items: flex-start;
+    }
+
+    .detail-section {
+        padding: 20px;
+    }
+}
