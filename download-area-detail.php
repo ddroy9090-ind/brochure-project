@@ -167,6 +167,85 @@ $report = [
     'generated_at' => date('F j, Y g:i A'),
 ];
 
+$filesByKey = [];
+
+$fileTableCheck = $conn->query("SHOW TABLES LIKE 'area_detail_files'");
+if ($fileTableCheck === false) {
+    $respondWithError(500, 'Unable to verify area detail files table.');
+}
+
+$fileTableExists = $fileTableCheck->num_rows > 0;
+$fileTableCheck->free();
+
+if ($fileTableExists) {
+    $fileQuery = <<<'SQL'
+        SELECT
+            file_key,
+            file_name,
+            mime_type,
+            file_size,
+            file_data,
+            created_at
+        FROM area_detail_files
+        WHERE area_detail_id = ?
+        ORDER BY created_at ASC, id ASC
+        SQL;
+
+    $fileStmt = $conn->prepare($fileQuery);
+    if (!$fileStmt) {
+        $respondWithError(500, 'Unable to prepare area detail files query.');
+    }
+
+    if (!$fileStmt->bind_param('i', $areaId)) {
+        $fileStmt->close();
+        $respondWithError(500, 'Unable to bind area detail files query parameter.');
+    }
+
+    if (!$fileStmt->execute()) {
+        $fileStmt->close();
+        $respondWithError(500, 'Unable to execute area detail files query.');
+    }
+
+    $fileResult = $fileStmt->get_result();
+    if ($fileResult === false) {
+        $fileStmt->close();
+        $respondWithError(500, 'Unable to fetch area detail files.');
+    }
+
+    while ($fileRow = $fileResult->fetch_assoc()) {
+        $fileKey = $trimValue($fileRow['file_key'] ?? '');
+        if ($fileKey === '') {
+            continue;
+        }
+
+        if (!array_key_exists('file_data', $fileRow)) {
+            continue;
+        }
+
+        $fileData = $fileRow['file_data'];
+        if (!is_string($fileData) || $fileData === '') {
+            continue;
+        }
+
+        $mimeType = $trimValue($fileRow['mime_type'] ?? '');
+        $base64 = base64_encode($fileData);
+        $dataUri = 'data:' . ($mimeType !== '' ? $mimeType : 'application/octet-stream') . ';base64,' . $base64;
+        $isImage = $mimeType !== '' && strpos($mimeType, 'image/') === 0;
+
+        $filesByKey[$fileKey][] = [
+            'name' => $trimValue($fileRow['file_name'] ?? ''),
+            'mime' => $mimeType,
+            'size' => array_key_exists('file_size', $fileRow) ? (int) $fileRow['file_size'] : null,
+            'data_uri' => $dataUri,
+            'is_image' => $isImage,
+            'created_at' => $formatDate($fileRow['created_at'] ?? ''),
+        ];
+    }
+
+    $fileResult->free();
+    $fileStmt->close();
+}
+
 $templatePath = __DIR__ . '/pdfhtml/index.php';
 if (!is_file($templatePath)) {
     $respondWithError(500, 'PDF template is missing.');
@@ -174,6 +253,7 @@ if (!is_file($templatePath)) {
 
 ob_start();
 $report = $report;
+$filesByKey = $filesByKey;
 include $templatePath;
 $html = ob_get_clean();
 
