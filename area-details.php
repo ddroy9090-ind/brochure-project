@@ -562,10 +562,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $_POST = [];
         $_FILES = [];
     } catch (Throwable $exception) {
-        if ($transactionStarted) {
-            $conn->rollback();
-        }
         $errorMessage = $exception->getMessage();
+        if ($transactionStarted) {
+            try {
+                if ($conn instanceof mysqli && $conn->ping()) {
+                    $conn->rollback();
+                }
+            } catch (Throwable $rollbackException) {
+                $errorMessage .= ' (Rollback failed: ' . $rollbackException->getMessage() . ')';
+            }
+        }
     } finally {
         if ($fileStmt instanceof mysqli_stmt) {
             $fileStmt->close();
