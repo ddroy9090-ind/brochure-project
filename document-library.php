@@ -79,6 +79,14 @@ require_once __DIR__ . '/includes/common-header.php';
                             </div>
                         </div>
 
+                        <div class="row mt-3">
+                            <div class="col-12">
+                                <div id="pdfDownloadAlert" class="alert alert-info d-none" role="alert" aria-live="polite">
+                                    Your PDF is being prepared. Please wait for some time.
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Search + Tabs -->
                         <div class="row">
                             <div class="col-12">
@@ -212,5 +220,91 @@ require_once __DIR__ . '/includes/common-header.php';
         </div>
     </div>
 </div>
+
+<script>
+    (function () {
+        const alertEl = document.getElementById('pdfDownloadAlert');
+        if (!alertEl) {
+            return;
+        }
+
+        const showAlert = () => {
+            alertEl.classList.remove('d-none');
+            alertEl.classList.add('show');
+        };
+
+        const hideAlert = () => {
+            alertEl.classList.add('d-none');
+            alertEl.classList.remove('show');
+        };
+
+        const getFilenameFromResponse = (response) => {
+            const disposition = response.headers.get('Content-Disposition');
+            if (!disposition) {
+                return null;
+            }
+
+            const match = /filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/i.exec(disposition);
+            if (!match) {
+                return null;
+            }
+
+            if (match[1]) {
+                try {
+                    return decodeURIComponent(match[1]);
+                } catch (error) {
+                    console.error('Unable to decode filename from header.', error);
+                }
+            }
+
+            if (match[2]) {
+                return match[2];
+            }
+
+            return null;
+        };
+
+        const downloadLinks = document.querySelectorAll('.act-btn[aria-label="Download"][href*="download-area-detail.php"]');
+
+        downloadLinks.forEach((link) => {
+            link.addEventListener('click', (event) => {
+                event.preventDefault();
+                const url = link.getAttribute('href');
+                if (!url) {
+                    return;
+                }
+
+                showAlert();
+
+                fetch(url, { credentials: 'same-origin' })
+                    .then((response) => {
+                        if (!response.ok) {
+                            throw new Error('Failed to download PDF.');
+                        }
+
+                        return response.blob().then((blob) => ({ blob, response }));
+                    })
+                    .then(({ blob, response }) => {
+                        const filename = getFilenameFromResponse(response) || 'area-detail.pdf';
+                        const blobUrl = URL.createObjectURL(blob);
+                        const tempLink = document.createElement('a');
+                        tempLink.href = blobUrl;
+                        tempLink.download = filename;
+                        document.body.appendChild(tempLink);
+                        tempLink.click();
+                        tempLink.remove();
+                        window.setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+                    })
+                    .catch((error) => {
+                        console.error('Error downloading PDF:', error);
+                        window.alert('Unable to download the PDF. Please try again.');
+                    })
+                    .finally(() => {
+                        hideAlert();
+                    });
+            });
+        });
+    })();
+</script>
 
 <?php require_once __DIR__ . '/includes/common-footer.php'; ?>
