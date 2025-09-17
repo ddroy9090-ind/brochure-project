@@ -1009,7 +1009,7 @@ body {
 }
 
 .hh-docs .act-btn.danger:hover {
-   background: transparent;
+    background: transparent;
     border-color: #e24545;
 }
 
@@ -1166,7 +1166,8 @@ body {
 .detail-section__header h2 {
     margin: 0;
     font-weight: 600;
-    color: #0f172a;
+    color: #004a44;
+    font-size: 20px;
 }
 
 .property-view__title {
@@ -1255,7 +1256,7 @@ body {
     font-size: 0.95rem;
 }
 
-.detail-media-group + .detail-media-group {
+.detail-media-group+.detail-media-group {
     margin-top: 24px;
 }
 
@@ -1288,6 +1289,7 @@ body {
     width: 100%;
     border-radius: 10px;
     object-fit: cover;
+    height: 200px;
 }
 
 .detail-media-card figcaption {
